@@ -45,6 +45,19 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			},
 		},
 		{
+			ID:          "level-subset-model",
+			Object:      "model",
+			Created:     1700000000,
+			OwnedBy:     "test",
+			Type:        "gemini",
+			DisplayName: "Level Subset Model",
+			Thinking: &registry.ThinkingSupport{
+				Levels:         []string{"low", "high"},
+				ZeroAllowed:    false,
+				DynamicAllowed: false,
+			},
+		},
+		{
 			ID:          "gemini-budget-model",
 			Object:      "model",
 			Created:     1700000000,
@@ -139,7 +152,8 @@ func TestThinkingE2EMatrix(t *testing.T) {
 
 	cases := []testCase{
 		// level-model (Levels=minimal/low/medium/high, ZeroAllowed=false, DynamicAllowed=false)
-		// Case 1: No suffix, translator adds default medium for codex
+
+		// Case 1: No suffix → injected default → medium
 		{
 			name:        "1",
 			from:        "openai",
@@ -150,7 +164,7 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectValue: "medium",
 			expectErr:   false,
 		},
-		// Case 2: Explicit medium level
+		// Case 2: Specified medium → medium
 		{
 			name:        "2",
 			from:        "openai",
@@ -161,7 +175,7 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectValue: "medium",
 			expectErr:   false,
 		},
-		// Case 3: xhigh not in Levels=[minimal,low,medium,high] → ValidateConfig returns error
+		// Case 3: Specified xhigh → out of range error
 		{
 			name:        "3",
 			from:        "openai",
@@ -171,7 +185,7 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectField: "",
 			expectErr:   true,
 		},
-		// Case 4: none → ModeNone, ZeroAllowed=false → clamp to min level (minimal)
+		// Case 4: Level none → clamped to minimal (ZeroAllowed=false)
 		{
 			name:        "4",
 			from:        "openai",
@@ -182,7 +196,7 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectValue: "minimal",
 			expectErr:   false,
 		},
-		// Case 5: auto → ModeAuto, DynamicAllowed=false → convert to mid-range (medium)
+		// Case 5: Level auto → DynamicAllowed=false → medium (mid-range)
 		{
 			name:        "5",
 			from:        "openai",
@@ -193,7 +207,7 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectValue: "medium",
 			expectErr:   false,
 		},
-		// Case 6: No suffix from gemini → translator injects default reasoning.effort: medium
+		// Case 6: No suffix from gemini → injected default → medium
 		{
 			name:        "6",
 			from:        "gemini",
@@ -204,7 +218,7 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectValue: "medium",
 			expectErr:   false,
 		},
-		// Case 7: 8192 → medium (1025-8192)
+		// Case 7: Budget 8192 → medium
 		{
 			name:        "7",
 			from:        "gemini",
@@ -215,17 +229,18 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectValue: "medium",
 			expectErr:   false,
 		},
-		// Case 8: 64000 → xhigh → not supported → error
+		// Case 8: Budget 64000 → clamped to high
 		{
 			name:        "8",
 			from:        "gemini",
 			to:          "codex",
 			modelSuffix: "level-model(64000)",
 			inputJSON:   `{"model":"level-model(64000)","contents":[{"role":"user","parts":[{"text":"hi"}]}]}`,
-			expectField: "",
-			expectErr:   true,
+			expectField: "reasoning.effort",
+			expectValue: "high",
+			expectErr:   false,
 		},
-		// Case 9: 0 → ModeNone, ZeroAllowed=false → clamp to min level (minimal)
+		// Case 9: Budget 0 → clamped to minimal (ZeroAllowed=false)
 		{
 			name:        "9",
 			from:        "gemini",
@@ -236,7 +251,7 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectValue: "minimal",
 			expectErr:   false,
 		},
-		// Case 10: -1 → ModeAuto, DynamicAllowed=false → convert to mid-range (medium)
+		// Case 10: Budget -1 → auto → DynamicAllowed=false → medium (mid-range)
 		{
 			name:        "10",
 			from:        "gemini",
@@ -247,7 +262,7 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectValue: "medium",
 			expectErr:   false,
 		},
-		// Case 11: No suffix from claude → no thinking config
+		// Case 11: Claude source no suffix → passthrough (no thinking)
 		{
 			name:        "11",
 			from:        "claude",
@@ -257,7 +272,7 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectField: "",
 			expectErr:   false,
 		},
-		// Case 12: 8192 → medium
+		// Case 12: Budget 8192 → medium
 		{
 			name:        "12",
 			from:        "claude",
@@ -268,17 +283,18 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectValue: "medium",
 			expectErr:   false,
 		},
-		// Case 13: 64000 → xhigh → not supported → error
+		// Case 13: Budget 64000 → clamped to high
 		{
 			name:        "13",
 			from:        "claude",
 			to:          "openai",
 			modelSuffix: "level-model(64000)",
 			inputJSON:   `{"model":"level-model(64000)","messages":[{"role":"user","content":"hi"}]}`,
-			expectField: "",
-			expectErr:   true,
+			expectField: "reasoning_effort",
+			expectValue: "high",
+			expectErr:   false,
 		},
-		// Case 14: 0 → ModeNone, ZeroAllowed=false → clamp to min level (minimal)
+		// Case 14: Budget 0 → clamped to minimal (ZeroAllowed=false)
 		{
 			name:        "14",
 			from:        "claude",
@@ -289,7 +305,7 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectValue: "minimal",
 			expectErr:   false,
 		},
-		// Case 15: -1 → ModeAuto, DynamicAllowed=false → convert to mid-range (medium)
+		// Case 15: Budget -1 → auto → DynamicAllowed=false → medium (mid-range)
 		{
 			name:        "15",
 			from:        "claude",
@@ -301,9 +317,37 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectErr:   false,
 		},
 
-		// gemini-budget-model (Min=128, Max=20000, ZeroAllowed=false, DynamicAllowed=true)
+		// level-subset-model (Levels=low/high, ZeroAllowed=false, DynamicAllowed=false)
+
+		// Case 16: Budget 8192 → medium → rounded down to low
 		{
 			name:        "16",
+			from:        "gemini",
+			to:          "openai",
+			modelSuffix: "level-subset-model(8192)",
+			inputJSON:   `{"model":"level-subset-model(8192)","contents":[{"role":"user","parts":[{"text":"hi"}]}]}`,
+			expectField: "reasoning_effort",
+			expectValue: "low",
+			expectErr:   false,
+		},
+		// Case 17: Budget 1 → minimal → clamped to low (min supported)
+		{
+			name:            "17",
+			from:            "claude",
+			to:              "gemini",
+			modelSuffix:     "level-subset-model(1)",
+			inputJSON:       `{"model":"level-subset-model(1)","messages":[{"role":"user","content":"hi"}]}`,
+			expectField:     "generationConfig.thinkingConfig.thinkingLevel",
+			expectValue:     "low",
+			includeThoughts: "true",
+			expectErr:       false,
+		},
+
+		// gemini-budget-model (Min=128, Max=20000, ZeroAllowed=false, DynamicAllowed=true)
+
+		// Case 18: No suffix → passthrough
+		{
+			name:        "18",
 			from:        "openai",
 			to:          "gemini",
 			modelSuffix: "gemini-budget-model",
@@ -311,9 +355,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectField: "",
 			expectErr:   false,
 		},
-		// medium → 8192
+		// Case 19: Effort medium → 8192
 		{
-			name:            "17",
+			name:            "19",
 			from:            "openai",
 			to:              "gemini",
 			modelSuffix:     "gemini-budget-model(medium)",
@@ -323,9 +367,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			includeThoughts: "true",
 			expectErr:       false,
 		},
-		// xhigh → 32768 → clamp to 20000
+		// Case 20: Effort xhigh → clamped to 20000 (max)
 		{
-			name:            "18",
+			name:            "20",
 			from:            "openai",
 			to:              "gemini",
 			modelSuffix:     "gemini-budget-model(xhigh)",
@@ -335,9 +379,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			includeThoughts: "true",
 			expectErr:       false,
 		},
-		// none → 0 → ZeroAllowed=false → clamp to 128, includeThoughts=false
+		// Case 21: Effort none → clamped to 128 (min) → includeThoughts=false
 		{
-			name:            "19",
+			name:            "21",
 			from:            "openai",
 			to:              "gemini",
 			modelSuffix:     "gemini-budget-model(none)",
@@ -347,9 +391,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			includeThoughts: "false",
 			expectErr:       false,
 		},
-		// auto → -1 dynamic allowed
+		// Case 22: Effort auto → DynamicAllowed=true → -1
 		{
-			name:            "20",
+			name:            "22",
 			from:            "openai",
 			to:              "gemini",
 			modelSuffix:     "gemini-budget-model(auto)",
@@ -359,8 +403,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			includeThoughts: "true",
 			expectErr:       false,
 		},
+		// Case 23: Claude source no suffix → passthrough
 		{
-			name:        "21",
+			name:        "23",
 			from:        "claude",
 			to:          "gemini",
 			modelSuffix: "gemini-budget-model",
@@ -368,8 +413,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectField: "",
 			expectErr:   false,
 		},
+		// Case 24: Budget 8192 → 8192
 		{
-			name:            "22",
+			name:            "24",
 			from:            "claude",
 			to:              "gemini",
 			modelSuffix:     "gemini-budget-model(8192)",
@@ -379,8 +425,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			includeThoughts: "true",
 			expectErr:       false,
 		},
+		// Case 25: Budget 64000 → clamped to 20000 (max)
 		{
-			name:            "23",
+			name:            "25",
 			from:            "claude",
 			to:              "gemini",
 			modelSuffix:     "gemini-budget-model(64000)",
@@ -390,8 +437,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			includeThoughts: "true",
 			expectErr:       false,
 		},
+		// Case 26: Budget 0 → clamped to 128 (min) → includeThoughts=false
 		{
-			name:            "24",
+			name:            "26",
 			from:            "claude",
 			to:              "gemini",
 			modelSuffix:     "gemini-budget-model(0)",
@@ -401,8 +449,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			includeThoughts: "false",
 			expectErr:       false,
 		},
+		// Case 27: Budget -1 → DynamicAllowed=true → -1
 		{
-			name:            "25",
+			name:            "27",
 			from:            "claude",
 			to:              "gemini",
 			modelSuffix:     "gemini-budget-model(-1)",
@@ -414,8 +463,10 @@ func TestThinkingE2EMatrix(t *testing.T) {
 		},
 
 		// gemini-mixed-model (Min=128, Max=32768, Levels=low/high, ZeroAllowed=false, DynamicAllowed=true)
+
+		// Case 28: OpenAI source no suffix → passthrough
 		{
-			name:        "26",
+			name:        "28",
 			from:        "openai",
 			to:          "gemini",
 			modelSuffix: "gemini-mixed-model",
@@ -423,9 +474,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectField: "",
 			expectErr:   false,
 		},
-		// high → use thinkingLevel
+		// Case 29: Effort high → low/high supported → high
 		{
-			name:            "27",
+			name:            "29",
 			from:            "openai",
 			to:              "gemini",
 			modelSuffix:     "gemini-mixed-model(high)",
@@ -435,9 +486,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			includeThoughts: "true",
 			expectErr:       false,
 		},
-		// xhigh → not in Levels=[low,high] → error
+		// Case 30: Effort xhigh → not in low/high → error
 		{
-			name:        "28",
+			name:        "30",
 			from:        "openai",
 			to:          "gemini",
 			modelSuffix: "gemini-mixed-model(xhigh)",
@@ -445,9 +496,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectField: "",
 			expectErr:   true,
 		},
-		// none → ModeNone, ZeroAllowed=false → set Level to lowest (low), includeThoughts=false
+		// Case 31: Effort none → clamped to low (min supported) → includeThoughts=false
 		{
-			name:            "29",
+			name:            "31",
 			from:            "openai",
 			to:              "gemini",
 			modelSuffix:     "gemini-mixed-model(none)",
@@ -457,9 +508,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			includeThoughts: "false",
 			expectErr:       false,
 		},
-		// auto → dynamic allowed, use thinkingBudget=-1
+		// Case 32: Effort auto → DynamicAllowed=true → -1 (budget)
 		{
-			name:            "30",
+			name:            "32",
 			from:            "openai",
 			to:              "gemini",
 			modelSuffix:     "gemini-mixed-model(auto)",
@@ -469,8 +520,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			includeThoughts: "true",
 			expectErr:       false,
 		},
+		// Case 33: Claude source no suffix → passthrough
 		{
-			name:        "31",
+			name:        "33",
 			from:        "claude",
 			to:          "gemini",
 			modelSuffix: "gemini-mixed-model",
@@ -478,9 +530,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectField: "",
 			expectErr:   false,
 		},
-		// 8192 → ModeBudget → clamp (in range) → thinkingBudget: 8192
+		// Case 34: Budget 8192 → 8192 (keep budget)
 		{
-			name:            "32",
+			name:            "34",
 			from:            "claude",
 			to:              "gemini",
 			modelSuffix:     "gemini-mixed-model(8192)",
@@ -490,9 +542,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			includeThoughts: "true",
 			expectErr:       false,
 		},
-		// 64000 → ModeBudget → clamp to 32768 → thinkingBudget: 32768
+		// Case 35: Budget 64000 → clamped to 32768 (max)
 		{
-			name:            "33",
+			name:            "35",
 			from:            "claude",
 			to:              "gemini",
 			modelSuffix:     "gemini-mixed-model(64000)",
@@ -502,9 +554,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			includeThoughts: "true",
 			expectErr:       false,
 		},
-		// 0 → ModeNone, ZeroAllowed=false → set Level to lowest (low), includeThoughts=false
+		// Case 36: Budget 0 → minimal → clamped to low (min level) → includeThoughts=false
 		{
-			name:            "34",
+			name:            "36",
 			from:            "claude",
 			to:              "gemini",
 			modelSuffix:     "gemini-mixed-model(0)",
@@ -514,9 +566,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			includeThoughts: "false",
 			expectErr:       false,
 		},
-		// -1 → auto, dynamic allowed
+		// Case 37: Budget -1 → DynamicAllowed=true → -1 (budget)
 		{
-			name:            "35",
+			name:            "37",
 			from:            "claude",
 			to:              "gemini",
 			modelSuffix:     "gemini-mixed-model(-1)",
@@ -528,8 +580,10 @@ func TestThinkingE2EMatrix(t *testing.T) {
 		},
 
 		// claude-budget-model (Min=1024, Max=128000, ZeroAllowed=true, DynamicAllowed=false)
+
+		// Case 38: OpenAI source no suffix → passthrough
 		{
-			name:        "36",
+			name:        "38",
 			from:        "openai",
 			to:          "claude",
 			modelSuffix: "claude-budget-model",
@@ -537,9 +591,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectField: "",
 			expectErr:   false,
 		},
-		// medium → 8192
+		// Case 39: Effort medium → 8192
 		{
-			name:        "37",
+			name:        "39",
 			from:        "openai",
 			to:          "claude",
 			modelSuffix: "claude-budget-model(medium)",
@@ -548,9 +602,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectValue: "8192",
 			expectErr:   false,
 		},
-		// xhigh → 32768
+		// Case 40: Effort xhigh → clamped to 32768 (matrix value)
 		{
-			name:        "38",
+			name:        "40",
 			from:        "openai",
 			to:          "claude",
 			modelSuffix: "claude-budget-model(xhigh)",
@@ -559,9 +613,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectValue: "32768",
 			expectErr:   false,
 		},
-		// none → ZeroAllowed=true → disabled
+		// Case 41: Effort none → ZeroAllowed=true → disabled
 		{
-			name:        "39",
+			name:        "41",
 			from:        "openai",
 			to:          "claude",
 			modelSuffix: "claude-budget-model(none)",
@@ -570,9 +624,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectValue: "disabled",
 			expectErr:   false,
 		},
-		// auto → ModeAuto, DynamicAllowed=false → convert to mid-range
+		// Case 42: Effort auto → DynamicAllowed=false → 64512 (mid-range)
 		{
-			name:        "40",
+			name:        "42",
 			from:        "openai",
 			to:          "claude",
 			modelSuffix: "claude-budget-model(auto)",
@@ -581,8 +635,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectValue: "64512",
 			expectErr:   false,
 		},
+		// Case 43: Gemini source no suffix → passthrough
 		{
-			name:        "41",
+			name:        "43",
 			from:        "gemini",
 			to:          "claude",
 			modelSuffix: "claude-budget-model",
@@ -590,8 +645,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectField: "",
 			expectErr:   false,
 		},
+		// Case 44: Budget 8192 → 8192
 		{
-			name:        "42",
+			name:        "44",
 			from:        "gemini",
 			to:          "claude",
 			modelSuffix: "claude-budget-model(8192)",
@@ -600,8 +656,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectValue: "8192",
 			expectErr:   false,
 		},
+		// Case 45: Budget 200000 → clamped to 128000 (max)
 		{
-			name:        "43",
+			name:        "45",
 			from:        "gemini",
 			to:          "claude",
 			modelSuffix: "claude-budget-model(200000)",
@@ -610,9 +667,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectValue: "128000",
 			expectErr:   false,
 		},
-		// 0 → ZeroAllowed=true → disabled
+		// Case 46: Budget 0 → ZeroAllowed=true → disabled
 		{
-			name:        "44",
+			name:        "46",
 			from:        "gemini",
 			to:          "claude",
 			modelSuffix: "claude-budget-model(0)",
@@ -621,9 +678,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectValue: "disabled",
 			expectErr:   false,
 		},
-		// -1 → auto → DynamicAllowed=false → mid-range
+		// Case 47: Budget -1 → auto → DynamicAllowed=false → 64512 (mid-range)
 		{
-			name:        "45",
+			name:        "47",
 			from:        "gemini",
 			to:          "claude",
 			modelSuffix: "claude-budget-model(-1)",
@@ -634,8 +691,10 @@ func TestThinkingE2EMatrix(t *testing.T) {
 		},
 
 		// antigravity-budget-model (Min=128, Max=20000, ZeroAllowed=true, DynamicAllowed=true)
+
+		// Case 48: Gemini to Antigravity no suffix → passthrough
 		{
-			name:        "46",
+			name:        "48",
 			from:        "gemini",
 			to:          "antigravity",
 			modelSuffix: "antigravity-budget-model",
@@ -643,8 +702,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectField: "",
 			expectErr:   false,
 		},
+		// Case 49: Effort medium → 8192
 		{
-			name:            "47",
+			name:            "49",
 			from:            "gemini",
 			to:              "antigravity",
 			modelSuffix:     "antigravity-budget-model(medium)",
@@ -654,8 +714,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			includeThoughts: "true",
 			expectErr:       false,
 		},
+		// Case 50: Effort xhigh → clamped to 20000 (max)
 		{
-			name:            "48",
+			name:            "50",
 			from:            "gemini",
 			to:              "antigravity",
 			modelSuffix:     "antigravity-budget-model(xhigh)",
@@ -665,8 +726,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			includeThoughts: "true",
 			expectErr:       false,
 		},
+		// Case 51: Effort none → ZeroAllowed=true → 0 → includeThoughts=false
 		{
-			name:            "49",
+			name:            "51",
 			from:            "gemini",
 			to:              "antigravity",
 			modelSuffix:     "antigravity-budget-model(none)",
@@ -676,8 +738,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			includeThoughts: "false",
 			expectErr:       false,
 		},
+		// Case 52: Effort auto → DynamicAllowed=true → -1
 		{
-			name:            "50",
+			name:            "52",
 			from:            "gemini",
 			to:              "antigravity",
 			modelSuffix:     "antigravity-budget-model(auto)",
@@ -687,8 +750,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			includeThoughts: "true",
 			expectErr:       false,
 		},
+		// Case 53: Claude to Antigravity no suffix → passthrough
 		{
-			name:        "51",
+			name:        "53",
 			from:        "claude",
 			to:          "antigravity",
 			modelSuffix: "antigravity-budget-model",
@@ -696,8 +760,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectField: "",
 			expectErr:   false,
 		},
+		// Case 54: Budget 8192 → 8192
 		{
-			name:            "52",
+			name:            "54",
 			from:            "claude",
 			to:              "antigravity",
 			modelSuffix:     "antigravity-budget-model(8192)",
@@ -707,8 +772,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			includeThoughts: "true",
 			expectErr:       false,
 		},
+		// Case 55: Budget 64000 → clamped to 20000 (max)
 		{
-			name:            "53",
+			name:            "55",
 			from:            "claude",
 			to:              "antigravity",
 			modelSuffix:     "antigravity-budget-model(64000)",
@@ -718,8 +784,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			includeThoughts: "true",
 			expectErr:       false,
 		},
+		// Case 56: Budget 0 → ZeroAllowed=true → 0 → includeThoughts=false
 		{
-			name:            "54",
+			name:            "56",
 			from:            "claude",
 			to:              "antigravity",
 			modelSuffix:     "antigravity-budget-model(0)",
@@ -729,8 +796,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			includeThoughts: "false",
 			expectErr:       false,
 		},
+		// Case 57: Budget -1 → DynamicAllowed=true → -1
 		{
-			name:            "55",
+			name:            "57",
 			from:            "claude",
 			to:              "antigravity",
 			modelSuffix:     "antigravity-budget-model(-1)",
@@ -742,8 +810,10 @@ func TestThinkingE2EMatrix(t *testing.T) {
 		},
 
 		// no-thinking-model (Thinking=nil)
+
+		// Case 58: No thinking support → no configuration
 		{
-			name:        "46",
+			name:        "58",
 			from:        "gemini",
 			to:          "openai",
 			modelSuffix: "no-thinking-model",
@@ -751,8 +821,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectField: "",
 			expectErr:   false,
 		},
+		// Case 59: Budget 8192 → no thinking support → suffix stripped → no configuration
 		{
-			name:        "47",
+			name:        "59",
 			from:        "gemini",
 			to:          "openai",
 			modelSuffix: "no-thinking-model(8192)",
@@ -760,8 +831,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectField: "",
 			expectErr:   false,
 		},
+		// Case 60: Budget 0 → suffix stripped → no configuration
 		{
-			name:        "48",
+			name:        "60",
 			from:        "gemini",
 			to:          "openai",
 			modelSuffix: "no-thinking-model(0)",
@@ -769,8 +841,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectField: "",
 			expectErr:   false,
 		},
+		// Case 61: Budget -1 → suffix stripped → no configuration
 		{
-			name:        "49",
+			name:        "61",
 			from:        "gemini",
 			to:          "openai",
 			modelSuffix: "no-thinking-model(-1)",
@@ -778,8 +851,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectField: "",
 			expectErr:   false,
 		},
+		// Case 62: Claude source no suffix → no configuration
 		{
-			name:        "50",
+			name:        "62",
 			from:        "claude",
 			to:          "openai",
 			modelSuffix: "no-thinking-model",
@@ -787,8 +861,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectField: "",
 			expectErr:   false,
 		},
+		// Case 63: Budget 8192 → suffix stripped → no configuration
 		{
-			name:        "51",
+			name:        "63",
 			from:        "claude",
 			to:          "openai",
 			modelSuffix: "no-thinking-model(8192)",
@@ -796,8 +871,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectField: "",
 			expectErr:   false,
 		},
+		// Case 64: Budget 0 → suffix stripped → no configuration
 		{
-			name:        "52",
+			name:        "64",
 			from:        "claude",
 			to:          "openai",
 			modelSuffix: "no-thinking-model(0)",
@@ -805,8 +881,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectField: "",
 			expectErr:   false,
 		},
+		// Case 65: Budget -1 → suffix stripped → no configuration
 		{
-			name:        "53",
+			name:        "65",
 			from:        "claude",
 			to:          "openai",
 			modelSuffix: "no-thinking-model(-1)",
@@ -816,8 +893,10 @@ func TestThinkingE2EMatrix(t *testing.T) {
 		},
 
 		// user-defined-model (UserDefined=true, Thinking=nil)
+
+		// Case 66: User defined model no suffix → passthrough
 		{
-			name:        "54",
+			name:        "66",
 			from:        "gemini",
 			to:          "openai",
 			modelSuffix: "user-defined-model",
@@ -825,9 +904,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectField: "",
 			expectErr:   false,
 		},
-		// 8192 → medium (passthrough for UserDefined)
+		// Case 67: Budget 8192 → passthrough logic → medium
 		{
-			name:        "55",
+			name:        "67",
 			from:        "gemini",
 			to:          "openai",
 			modelSuffix: "user-defined-model(8192)",
@@ -836,9 +915,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectValue: "medium",
 			expectErr:   false,
 		},
-		// 64000 → xhigh
+		// Case 68: Budget 64000 → passthrough logic → xhigh
 		{
-			name:        "56",
+			name:        "68",
 			from:        "gemini",
 			to:          "openai",
 			modelSuffix: "user-defined-model(64000)",
@@ -847,9 +926,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectValue: "xhigh",
 			expectErr:   false,
 		},
-		// 0 → none
+		// Case 69: Budget 0 → passthrough logic → none
 		{
-			name:        "57",
+			name:        "69",
 			from:        "gemini",
 			to:          "openai",
 			modelSuffix: "user-defined-model(0)",
@@ -858,9 +937,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectValue: "none",
 			expectErr:   false,
 		},
-		// -1 → auto
+		// Case 70: Budget -1 → passthrough logic → auto
 		{
-			name:        "58",
+			name:        "70",
 			from:        "gemini",
 			to:          "openai",
 			modelSuffix: "user-defined-model(-1)",
@@ -869,9 +948,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectValue: "auto",
 			expectErr:   false,
 		},
-		// Case 59: No suffix from claude → translator injects default reasoning.effort: medium
+		// Case 71: Claude to Codex no suffix → injected default → medium
 		{
-			name:        "59",
+			name:        "71",
 			from:        "claude",
 			to:          "codex",
 			modelSuffix: "user-defined-model",
@@ -880,9 +959,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectValue: "medium",
 			expectErr:   false,
 		},
-		// 8192 → medium
+		// Case 72: Budget 8192 → passthrough logic → medium
 		{
-			name:        "60",
+			name:        "72",
 			from:        "claude",
 			to:          "codex",
 			modelSuffix: "user-defined-model(8192)",
@@ -891,9 +970,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectValue: "medium",
 			expectErr:   false,
 		},
-		// 64000 → xhigh
+		// Case 73: Budget 64000 → passthrough logic → xhigh
 		{
-			name:        "61",
+			name:        "73",
 			from:        "claude",
 			to:          "codex",
 			modelSuffix: "user-defined-model(64000)",
@@ -902,9 +981,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectValue: "xhigh",
 			expectErr:   false,
 		},
-		// 0 → none
+		// Case 74: Budget 0 → passthrough logic → none
 		{
-			name:        "62",
+			name:        "74",
 			from:        "claude",
 			to:          "codex",
 			modelSuffix: "user-defined-model(0)",
@@ -913,9 +992,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectValue: "none",
 			expectErr:   false,
 		},
-		// -1 → auto
+		// Case 75: Budget -1 → passthrough logic → auto
 		{
-			name:        "63",
+			name:        "75",
 			from:        "claude",
 			to:          "codex",
 			modelSuffix: "user-defined-model(-1)",
@@ -924,9 +1003,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectValue: "auto",
 			expectErr:   false,
 		},
-		// openai/codex → gemini/claude for user-defined-model
+		// Case 76: OpenAI to Gemini budget 8192 → passthrough → 8192
 		{
-			name:            "64",
+			name:            "76",
 			from:            "openai",
 			to:              "gemini",
 			modelSuffix:     "user-defined-model(8192)",
@@ -936,8 +1015,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			includeThoughts: "true",
 			expectErr:       false,
 		},
+		// Case 77: OpenAI to Claude budget 8192 → passthrough → 8192
 		{
-			name:        "65",
+			name:        "77",
 			from:        "openai",
 			to:          "claude",
 			modelSuffix: "user-defined-model(8192)",
@@ -946,8 +1026,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			expectValue: "8192",
 			expectErr:   false,
 		},
+		// Case 78: Codex to Gemini budget 8192 → passthrough → 8192
 		{
-			name:            "66",
+			name:            "78",
 			from:            "codex",
 			to:              "gemini",
 			modelSuffix:     "user-defined-model(8192)",
@@ -957,8 +1038,9 @@ func TestThinkingE2EMatrix(t *testing.T) {
 			includeThoughts: "true",
 			expectErr:       false,
 		},
+		// Case 79: Codex to Claude budget 8192 → passthrough → 8192
 		{
-			name:        "67",
+			name:        "79",
 			from:        "codex",
 			to:          "claude",
 			modelSuffix: "user-defined-model(8192)",
