@@ -16,6 +16,8 @@ import (
 //   - Auto-converts between Budget and Level formats based on model capability
 //   - Validates that requested level is in the model's supported levels list
 //   - Clamps budget values to model's allowed range
+//   - When converting Budget -> Level for level-only models, clamps the derived standard level to the nearest supported level
+//     (special values none/auto are preserved)
 //
 // Parameters:
 //   - config: The thinking configuration to validate
@@ -69,7 +71,8 @@ func ValidateConfig(config ThinkingConfig, modelInfo *registry.ModelInfo, provid
 			if !ok {
 				return nil, NewThinkingError(ErrUnknownLevel, fmt.Sprintf("budget %d cannot be converted to a valid level", normalized.Budget))
 			}
-			// Clamp level during budget conversion (user specified budget, not level)
+			// When converting Budget -> Level for level-only models, clamp the derived standard level
+			// to the nearest supported level. Special values (none/auto) are preserved.
 			normalized.Mode = ModeLevel
 			normalized.Level = clampLevel(ThinkingLevel(level), modelInfo, provider)
 			normalized.Budget = 0
